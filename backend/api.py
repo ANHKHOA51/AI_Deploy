@@ -30,6 +30,10 @@ from .restaurant_repository import RestaurantRepository
 from .search import search_candidates
 
 BACKEND_DIR = Path(__file__).resolve().parent
+ROOT_DIR = BACKEND_DIR.parent
+
+# Prefer project-root .env, then fallback to backend/.env.
+load_dotenv(ROOT_DIR / ".env")
 load_dotenv(BACKEND_DIR / ".env")
 
 TRAIN_COMMAND = "python -m backend.restaurant_ranker"
