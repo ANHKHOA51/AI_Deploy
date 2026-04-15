@@ -12,6 +12,7 @@ asked to train it first via ``python -m backend.restaurant_ranker``.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 import os
 from pathlib import Path
 from typing import Any
@@ -165,12 +166,24 @@ def rank_restaurants(payload: RankRequest) -> dict[str, Any]:
         candidate_ids = normalize_candidate_ids(payload.candidate_restaurant_ids)
         retrieval_source = "request"
     elif payload.use_pinecone:
+        retrieval_timeout_seconds = max(int((os.getenv("PINECONE_QUERY_TIMEOUT") or "12").strip()), 1)
         try:
-            retrieval_matches = search_candidates(
-                query=payload.query,
-                top_k=payload.pinecone_top_k,
-                include_metadata=False,
-            )
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(
+                    search_candidates,
+                    query=payload.query,
+                    top_k=payload.pinecone_top_k,
+                    include_metadata=False,
+                )
+                retrieval_matches = future.result(timeout=retrieval_timeout_seconds)
+        except FuturesTimeoutError as exc:
+            raise HTTPException(
+                status_code=504,
+                detail=(
+                    "Pinecone retrieval timed out after "
+                    f"{retrieval_timeout_seconds}s."
+                ),
+            ) from exc
         except Exception as exc:
             raise HTTPException(status_code=503, detail=f"Pinecone retrieval failed: {exc}") from exc
 
