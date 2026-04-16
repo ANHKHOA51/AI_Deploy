@@ -232,7 +232,7 @@ def rank_restaurants(payload: RankRequest) -> dict[str, Any]:
     return response
 
 
-# if __name__ == "__main__":
-#     import uvicorn
+if __name__ == "__main__":
+    import uvicorn
 
-#     uvicorn.run("backend.api:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run("backend.api:app", host="0.0.0.0", port=8000, reload=False)

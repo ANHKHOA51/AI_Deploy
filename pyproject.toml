@@ -1,0 +1,4 @@
+[project.scripts]
+app = "backend.api:app"
+[tool.vercel.scripts]
+build = "python -m backend.api"
