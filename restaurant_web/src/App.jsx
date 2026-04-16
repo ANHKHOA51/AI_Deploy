@@ -9,7 +9,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
 
   const fetchRecommendations = async (query) => {
-    const response = await fetch("https://ai-deploy-js6u.onrender.com/rank", {
+    const response = await fetch("https://ai-deploy-1-pnwj.onrender.com/rank", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
