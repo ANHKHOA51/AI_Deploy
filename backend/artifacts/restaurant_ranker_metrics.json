@@ -14,6 +14,6 @@
   "best_params": {
     "model__alpha": 10.0
   },
-  "training_time_s": 0.00920360000003484,
+  "training_time_s": 0.002474900000152047,
   "selection_source": "Selected from modelling.ipynb"
 }

@@ -12,40 +12,50 @@ asked to train it first via ``python -m backend.restaurant_ranker``.
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
-from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from .restaurant_ranker import (
-    DEFAULT_ARTIFACT_PATH,
-    RestaurantRankerService,
-    normalize_restaurant_id,
-)
-from .restaurant_repository import RestaurantRepository
-from .search import search_candidates
+if __package__ in {None, ""}:
+    PROJECT_ROOT = Path(__file__).resolve().parent.parent
+    if str(PROJECT_ROOT) not in sys.path:
+        sys.path.insert(0, str(PROJECT_ROOT))
 
-BACKEND_DIR = Path(__file__).resolve().parent
-ROOT_DIR = BACKEND_DIR.parent
+    from backend import BACKEND_DIR, get_loaded_env_path, load_backend_environment, resolve_config_path
+    from backend.restaurant_ranker import (
+        DEFAULT_ARTIFACT_PATH,
+        RestaurantRankerService,
+        normalize_restaurant_id,
+    )
+    from backend.restaurant_repository import RestaurantRepository
+    from backend.search import search_candidates
+else:
+    from . import BACKEND_DIR, get_loaded_env_path, load_backend_environment, resolve_config_path
+    from .restaurant_ranker import (
+        DEFAULT_ARTIFACT_PATH,
+        RestaurantRankerService,
+        normalize_restaurant_id,
+    )
+    from .restaurant_repository import RestaurantRepository
+    from .search import search_candidates
 
-# Prefer project-root .env, then fallback to backend/.env.
-load_dotenv(ROOT_DIR / ".env")
-load_dotenv(BACKEND_DIR / ".env")
+load_backend_environment()
 
 TRAIN_COMMAND = "python -m backend.restaurant_ranker"
 
 
 def resolve_artifact_path() -> Path:
     configured_path = (os.getenv("RANKER_ARTIFACT_PATH") or "").strip()
-    artifact_path = Path(configured_path) if configured_path else DEFAULT_ARTIFACT_PATH
-    if artifact_path.is_absolute():
-        return artifact_path
-    return (BACKEND_DIR / artifact_path).resolve()
+    return resolve_config_path(
+        configured_path=configured_path,
+        default_path=DEFAULT_ARTIFACT_PATH,
+        fallback_base=BACKEND_DIR,
+    )
 
 
 ARTIFACT_PATH = resolve_artifact_path()
@@ -134,6 +144,7 @@ def get_repository() -> RestaurantRepository:
 @app.get("/health")
 def health() -> dict[str, Any]:
     repository = get_repository()
+    env_path = get_loaded_env_path()
     ranker_status: dict[str, Any] = {
         "artifact_path": str(ARTIFACT_PATH),
         "artifact_exists": ARTIFACT_PATH.exists(),
@@ -146,6 +157,7 @@ def health() -> dict[str, Any]:
         ranker_status["error"] = str(exc)
     return {
         "status": "ok" if ranker_status["ready"] else "degraded",
+        "env_file": str(env_path) if env_path is not None else None,
         "ranker": ranker_status,
         "repository": repository.health(),
     }
@@ -166,24 +178,12 @@ def rank_restaurants(payload: RankRequest) -> dict[str, Any]:
         candidate_ids = normalize_candidate_ids(payload.candidate_restaurant_ids)
         retrieval_source = "request"
     elif payload.use_pinecone:
-        retrieval_timeout_seconds = max(int((os.getenv("PINECONE_QUERY_TIMEOUT") or "12").strip()), 1)
         try:
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(
-                    search_candidates,
-                    query=payload.query,
-                    top_k=payload.pinecone_top_k,
-                    include_metadata=False,
-                )
-                retrieval_matches = future.result(timeout=retrieval_timeout_seconds)
-        except FuturesTimeoutError as exc:
-            raise HTTPException(
-                status_code=504,
-                detail=(
-                    "Pinecone retrieval timed out after "
-                    f"{retrieval_timeout_seconds}s."
-                ),
-            ) from exc
+            retrieval_matches = search_candidates(
+                query=payload.query,
+                top_k=payload.pinecone_top_k,
+                include_metadata=False,
+            )
         except Exception as exc:
             raise HTTPException(status_code=503, detail=f"Pinecone retrieval failed: {exc}") from exc
 

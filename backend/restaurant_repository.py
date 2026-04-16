@@ -4,17 +4,14 @@ from __future__ import annotations
 
 import os
 import re
-from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
-BACKEND_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = BACKEND_DIR.parent
-load_dotenv(PROJECT_ROOT / ".env")
-load_dotenv(BACKEND_DIR / ".env")
+from . import load_backend_environment
+
+load_backend_environment()
 
 from .restaurant_ranker import normalize_restaurant_id, slugify_column_name
 
@@ -87,7 +84,6 @@ class RestaurantRepository:
         self.sqlalchemy_url = _normalize_sqlalchemy_url(self.database_url)
         self.table_name = table_name or os.getenv("RESTAURANT_DB_TABLE") or "restaurants"
         self.id_column = id_column or os.getenv("RESTAURANT_DB_ID_COLUMN") or "restaurant_id"
-        self.db_connect_timeout = int((os.getenv("DB_CONNECT_TIMEOUT") or "5").strip())
 
     def _fetch_from_postgres(self, restaurant_ids: list[str]) -> pd.DataFrame:
         if not self.db_enabled:
@@ -101,12 +97,7 @@ class RestaurantRepository:
         placeholders = ", ".join(f":id_{index}" for index in range(len(restaurant_ids)))
         query = text(f"SELECT * FROM {table_name} WHERE CAST({id_column} AS TEXT) IN ({placeholders})")
 
-        engine = create_engine(
-            self.sqlalchemy_url,
-            pool_pre_ping=True,
-            pool_recycle=300,
-            connect_args={"connect_timeout": self.db_connect_timeout},
-        )
+        engine = create_engine(self.sqlalchemy_url)
         with engine.connect() as conn:
             return pd.read_sql_query(query, conn, params=params)
 
@@ -161,5 +152,4 @@ class RestaurantRepository:
             "db_ready": db_ready,
             "db_table": self.table_name,
             "db_id_column": self.id_column,
-            "db_connect_timeout": self.db_connect_timeout,
         }

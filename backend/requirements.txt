@@ -1,14 +1,10 @@
-ipython
-lightgbm
-matplotlib
-numpy
-pandas
-scikit-learn
-xgboost
 fastapi
 uvicorn
 python-dotenv
+pandas
 sqlalchemy
+numpy
+scikit-learn
 joblib
 pinecone
 psycopg[binary]
