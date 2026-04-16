@@ -1,4 +1,6 @@
+[project]
+name = "ai-deploy"
+version = "0.1.0"
+
 [project.scripts]
 app = "backend.api:app"
-[tool.vercel.scripts]
-build = "python -m backend.api"
